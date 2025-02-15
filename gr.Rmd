@@ -1,0 +1,418 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(deSolve)
+library(tidyverse)
+```
+
+
+```{r}
+#Creating a function 
+seiv<- function(times,y,parms){
+  with(c(as.list(y),parms),{
+    
+    N<-S+E+I+V
+    
+    lambda<-beta*I/N
+    
+    dS<-birth_rate*N - natural_mortality*S + loss_immunity*V -immunization_rate*S - lambda*S
+    
+    dE<-lambda*S - natural_mortality*E - progression_rate*E
+    
+    dI<-progression_rate*E - natural_mortality*I - rabies_mortality*I
+    
+    dV<-immunization_rate*S - loss_immunity*V - natural_mortality*V
+    
+    return(list(c(dS,dE,dI,dV)))
+  })
+}
+#define the population
+
+
+```
+
+```{r}
+#define the population : initial conditions
+
+popInit<-c(
+  S=9900,
+  E=0,
+  I=1000,
+  V=0
+)
+```
+
+```{r}
+#define the time 
+times<-seq(0,365,1)
+```
+
+```{r}
+# define our paameters
+parameters<-c(beta=0.6,
+              progression_rate=1/10,
+              rabies_mortality=1/4,
+              birth_rate=1/(365*6),
+              natural_mortality=1/(365*3),
+              immunization_rate=1/365*0.01, 
+              loss_immunity=1/(365*3)
+              )
+```
+
+```{r}
+ts.seiv<-data.frame(
+  lsoda(y=popInit,
+        times=times,
+        func=seiv,
+        parms = parameters)
+)
+```
+
+
+
+```{r}
+plot(ts.seiv$time, ts.seiv$I, type ="l")
+```
+
+
+```{r}
+ts.seiv1<-pivot_longer(ts.seiv,cols=2:5)
+```
+
+```{r}
+ggplot(ts.seiv1, aes(x=time,y=value,color=name))+ geom_line(linewidth=0.7)+theme_bw()
+```
+
+```{r}
+# Charger les packages nécessaires
+library(deSolve)
+library(ggplot2)
+
+# Définir les équations différentielles SEIRV avec vaccination temporelle
+seirv <- function(time, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    # Vaccination active après un certain temps (vacc_start)
+    omega_time <-  omega
+    N <- S + E + I + R
+    # Equations différentielles
+    #dS <- -beta * S * I / N - omega_time * S+ delta * V + b*N +delta*R - mu*S          # Susceptibles
+    #dE <- beta * S * I / N - sigma * E -mu*E              # Exposés
+    #dI <- sigma * E - gamma * I -mu*E                # Infectieux
+    #dR <- gamma * I  -mu*R                                # Rétablis
+    #dV <- omega_time * S - delta * V-mu*V               # Vaccinés
+    dS <- -beta * S * I / N  + b*N +delta*R - mu*S          # Susceptibles
+    dE <- beta * S * I / N - sigma * E -mu*E              # Exposés
+    dI <- sigma * E - gamma * I -mu*E                # Infectieux
+    dR <- gamma * I  -mu*R -delta*R                               # Rétablis
+    # Retourner les dérivées
+    list(c(dS, dE, dI, dR))
+  })
+}
+
+
+parameters <- c(
+  beta = 0.8,     # Taux de transmission
+  sigma = 1/5,  # Taux de progression (incubation, 5 jours en moyenne)
+  gamma = 1/10,    # Taux de récupération (10 jours infectieux en moyenne)
+  #omega =1/365*0.554*1 ,   # Taux de vaccination 0.01
+  omega=0,
+  delta = 1/365,  # Perte d'immunité (1 an d'immunité)
+  #N = 1e6,        # Taille de la population
+  #vacc_start = 50, # Jour de début de la vaccination
+  mu=1/(365),    # natural depth
+  b=1/(365) #birth rate
+)
+
+# Conditions initiales
+init_state <- c(
+  S = 10000000,  # Susceptibles
+  E = 300,     # Exposés
+  I = 90000,     # Infectieux
+  R = 0       # Rétablis
+  #V = 0        # Vaccinés
+)
+
+# Temps de simulation (en jours)
+time <- seq(0, 366, by = 1)  # Simulation sur 1 an
+
+ts.seirv <- data.frame(
+  lsoda(y= init_state,
+        times= times,
+        func=seirv,
+        parms = parameters)
+)
+#head(ts.seirv)
+ts.seirv1 <- pivot_longer(ts.seirv, cols=2:5)
+
+ggplot(ts.seirv1, aes(x=time, y=value, color=name))+
+  geom_line(linewidth=1)+
+  labs(
+    title = "Evolution of the infection",
+    x = "Time (days)",
+    y = "Nomber of cases",
+    color = "name"
+  )
+  theme_bw()
+
+```
+
+
+
+```{r}
+# Charger les packages nécessaires
+library(deSolve)
+library(ggplot2)
+
+# Définir les équations différentielles SEIRV avec vaccination temporelle
+seirv_model <- function(time, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    # Vaccination active après un certain temps (vacc_start)
+    omega_time <- ifelse(time >= vacc_start, omega, 0)
+    N <- S + E + I + V + R
+    # Equations différentielles
+    dS <- -beta * S * I / N - omega_time * S+ delta * V + b*N +delta*R - mu*S          # Susceptibles
+    dE <- beta * S * I / N - sigma * E -mu*E              # Exposés
+    dI <- sigma * E - gamma * I -mu*E                # Infectieux
+    dR <- gamma * I  -mu*R -delta*R                                  # Rétablis
+    dV <- omega_time * S - delta * V-mu*V               # Vaccinés
+    
+    # Retourner les dérivées
+    list(c(dS, dE, dI, dR, dV))
+  })
+}
+
+# Paramètres du modèle
+parameters <- c(
+  beta = 0.8,     # Taux de transmission
+  sigma = 1/5,  # Taux de progression (incubation, 5 jours en moyenne)
+  gamma = 1/10,    # Taux de récupération (10 jours infectieux en moyenne)
+  omega = 0.1,   # Taux de vaccination
+  delta = 1/365,  # Perte d'immunité (1 an d'immunité)
+  #N = 1e6,        # Taille de la population
+  vacc_start = 50, # Jour de début de la vaccination
+  mu=1/(365*6),    # natural depth
+  b=1/(365*6)
+)
+
+# Conditions initiales
+init_state <- c(
+  S = 1000000,  # Susceptibles
+  E = 300,     # Exposés
+  I = 90000,     # Infectieux
+  R = 0,       # Rétablis
+  V = 0        # Vaccinés
+)
+
+# Temps de simulation (en jours)
+time <- seq(0, 365, by = 1)  # Simulation sur 1 an
+
+# Résolution du modèle pour différents scénarios
+vacc_starts <- c(134,2,1,7,9,0,200)  # Moments de démarrage de la vaccination (jours)
+results <- list()
+
+#for (start in 1:365) {
+for (start in vacc_starts) {
+  parameters["vacc_start"] <- start
+  output <- ode(y = init_state, times = time, func = seirv_model, parms = parameters)
+  results[[paste0("VaccStart_", start)]] <- as.data.frame(output)
+}
+
+# Fusionner les résultats pour comparaison
+results_df <- do.call(rbind, lapply(names(results), function(name) {
+  df <- results[[name]]
+  df$Scenario <- name
+  return(df)
+}))
+
+print(results_df)
+
+library(dplyr)
+
+# Trouver la ligne avec le plus petit nombre d'infectieux (I)
+min_infection <- results_df %>%
+  filter(I == min(I)) 
+
+# Afficher le temps correspondant
+min_infection_time <- min_infection$time
+min_infection
+```
+```{r}
+# Visualisation des résultats
+ggplot(data = results_df, aes(x = time)) +
+  geom_line(aes(y = I, color = Scenario), size = 1) +
+  labs(
+    title = "Evolution of the infection in function of the time start vaccination",
+    x = "Time (days)",
+    y = "Nomber of cases",
+    color = "Scenarios"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Charger les packages nécessaires
+library(deSolve)
+library(ggplot2)
+
+# Définir les équations différentielles SEIRV avec vaccination en intervalles
+seirv_model <- function(time, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    # Vaccination active uniquement dans un intervalle de temps (vacc_start <= time <= vacc_end)
+    omega_time <- ifelse(time >= vacc_start & time <= vacc_end, omega, 0)
+     N <- S + E + I + V + R
+    # Equations différentielles
+    dS <- -beta * S * I / N - omega_time * S + delta * V + b * N + delta * R - mu * S  # Susceptibles
+    dE <- beta * S * I / N - sigma * E - mu * E                                       # Exposés
+    dI <- sigma * E - gamma * I - mu * I                                              # Infectieux
+    dR <- gamma * I - mu * R    -delta*R                                                         # Rétablis
+    dV <- omega_time * S - delta * V - mu * V                                         # Vaccinés
+    
+    # Retourner les dérivées
+    list(c(dS, dE, dI, dR, dV))
+  })
+}
+
+# Paramètres du modèle
+parameters <- c(
+  beta = 0.8,      # Taux de transmission
+  sigma = 1/5,   # Taux de progression (incubation, 5.2 jours en moyenne)
+  gamma = 1/10,     # Taux de récupération (10 jours infectieux en moyenne)
+  omega = 0.1,    # Taux de vaccination
+  delta = 1/365,   # Perte d'immunité (1 an d'immunité)
+  #N = 1e6,         # Taille de la population
+  vacc_start = 50, # Début de la vaccination
+  vacc_end = 80,   # Fin de la vaccination
+  mu = 1/(365*64),  # Taux de mortalité naturelle
+  b = 1/(365*64)    # Taux de natalité
+)
+
+# Conditions initiales
+init_state <- c(
+  S = 10000000,  # Susceptibles
+  E = 300,     # Exposés
+  I = 90000,     # Infectieux
+  R = 0,       # Rétablis
+  V = 0        # Vaccinés
+)
+
+# Temps de simulation (en jours)
+time <- seq(0, 365, by = 1)  # Simulation sur 1 an
+
+# Résolution du modèle pour différents intervalles de vaccination
+vacc_intervals <- list(
+    c(0, 15),   # Vaccination entre les jours 0 et 15
+     c(15, 30),   # Vaccination entre les jours 15 et 30
+   c(30, 60),   # Vaccination entre les jours 30 et 60
+   c(90, 100),  # Vaccination entre les jours 90 et 120
+   c(100, 135),  # Vaccination entre les jours 90 et 120
+  c(150, 180), # Vaccination entre les jours 150 et 180
+  c(210, 240)  # Vaccination entre les jours 210 et 240
+)
+
+results <- list()
+
+for (interval in vacc_intervals) {
+  parameters["vacc_start"] <- interval[1]
+  parameters["vacc_end"] <- interval[2]
+  output <- ode(y = init_state, times = time, func = seirv_model, parms = parameters)
+  scenario_name <- paste0("Vacc_", interval[1], "_to_", interval[2])
+  results[[scenario_name]] <- as.data.frame(output)
+}
+
+# Fusionner les résultats pour comparaison
+results_df <- do.call(rbind, lapply(names(results), function(name) {
+  df <- results[[name]]
+  df$Scenario <- name
+  return(df)
+}))
+
+# Visualisation des résultats
+ggplot(data = results_df, aes(x = time)) +
+  geom_line(aes(y = I, color = Scenario), size = 1) +
+  labs(
+    title = "Evolutions of infectious in function of time",
+    x = "Time (days)",
+    y = "Nomber of cases",
+    color = "Scenarios"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+# Paramètres
+parameters <- c(
+  beta = 0.4,      # Taux de transmission
+  sigma = 1/5.2,   # Taux de progression
+  gamma = 1/7,     # Taux de récupération
+  omega = 0.01,    # Taux de vaccination (par jour)
+  delta = 1/365,   # Perte d'immunité
+  N = 1e6,         # Taille de la population
+  mu = 1/(365*6),  # Taux de mortalité naturel
+  b = 1/(365*6)    # Taux de natalité
+)
+
+# Calcul de R0
+R0 <- parameters["beta"] / parameters["gamma"]
+
+# Proportion minimale à vacciner pour stopper la maladie
+P_v_threshold <- 1 - (1 / R0)
+
+# Simulation du modèle SEIRV
+time <- seq(0, 365, by = 1)  # 1 an
+init_state <- c(S = 999000, E = 100, I = 100, R = 0, V = 0)
+
+# Modèle SEIRV
+seirv_model <- function(time, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dS <- -beta * S * I / N - omega * S + delta * V + b * N - mu * S
+    dE <- beta * S * I / N - sigma * E - mu * E
+    dI <- sigma * E - gamma * I - mu * I
+    dR <- gamma * I - mu * R -delta*R   
+    dV <- omega * S - delta * V - mu * V
+    list(c(dS, dE, dI, dR, dV))
+  })
+}
+
+# Résolution du système
+output <- ode(y = init_state, times = time, func = seirv_model, parms = parameters)
+results <- as.data.frame(output)
+
+# Calcul de la proportion vaccinée
+results$V_prop <- results$V / parameters["N"]  # Proportion de vaccinés
+
+# Trouver le temps où le seuil critique est atteint
+time_threshold <- results$time[which(results$V_prop >= P_v_threshold)[1]]
+
+# Résultats
+cat("R0:", R0, "\n")
+cat("Proportion critique de la population à vacciner:", P_v_threshold * 100, "%\n")
+cat("Temps pour atteindre cette proportion:", time_threshold, "jours\n")
+
+```
+```{r}
+# Mise à jour des paramètres
+parameters["omega"] <- 0.12  # Augmenter le taux de vaccination
+time <- seq(0, 765, by = 1)  # Simulation sur 2 ans
+
+# Résolution du système
+output <- ode(y = init_state, times = time, func = seirv_model, parms = parameters)
+results <- as.data.frame(output)
+
+# Calcul de la proportion vaccinée
+results$V_prop <- results$V / parameters["N"]
+
+# Trouver le temps où le seuil critique est atteint
+time_threshold <- results$time[which(results$V_prop >= P_v_threshold)[1]]
+
+# Résultats
+cat("R0:", R0, "\n")
+cat("Proportion critique de la population à vacciner:", P_v_threshold * 100, "%\n")
+cat("Temps pour atteindre cette proportion:", ifelse(is.na(time_threshold), "Non atteint", paste(time_threshold, "jours")), "\n")
+
+```
+
